@@ -1,0 +1,182 @@
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+import seaborn as sns
+from sklearn.model_selection import train_test_split
+from sklearn.linear_model import LinearRegression
+from sklearn.tree import DecisionTreeRegressor
+from sklearn.ensemble import RandomForestRegressor
+from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
+
+#import data
+df_taxi_data= pd.read_csv('/content/drive/MyDrive/Dataset/taxi_trip_pricing.csv')
+
+df_taxi_data.head(10)
+
+#identify duplicate data
+duplicates = df_taxi_data.duplicated()
+
+#count duplicated rows
+num_duplicates = duplicates.sum()
+
+print("Duplicated rows: ")
+print(num_duplicates)
+
+missing_trip_price_count = df_taxi_data['Trip_Price'].isna().sum()
+missing_trip_price = df_taxi_data[df_taxi_data['Trip_Price'].isna()]
+
+print("Data with missing trip price:",missing_trip_price_count,"row")
+
+#since there are only 49 rows with missing trip price, smaller than 5% of the data,
+#and the trip price is the target variable, so it is better to remove the rows because this values are predictable
+
+# Remove rows where 'Trip_Price' is NaN (missing values)
+#df_taxi_data_cleaned = df_taxi_data.dropna(subset=['Trip_Price'])
+
+print("Cleaned Data:")
+df_taxi_data_cleaned.head(10)
+
+df_taxi_data_cleaned[df_taxi_data_cleaned.isna().any(axis=1)]
+missing_values = df_taxi_data_cleaned.isna().sum()
+print(missing_values)
+
+#to handle the missing values, we choose to do mean imputation for numerical values and
+#most frequent value (mode) to imputatoon categorical value
+from sklearn.impute import SimpleImputer
+# Impute missing values in numerical columns with mean
+imputer = SimpleImputer(strategy='mean')
+df_taxi_data_cleaned[['Trip_Distance_km', 'Base_Fare', 'Per_Km_Rate', 'Per_Minute_Rate', 'Trip_Duration_Minutes']] = imputer.fit_transform(df_taxi_data_cleaned[['Trip_Distance_km', 'Base_Fare', 'Per_Km_Rate', 'Per_Minute_Rate', 'Trip_Duration_Minutes']])
+
+# Impute missing values in categorical columns with mode
+imputer = SimpleImputer(strategy='most_frequent')
+df_taxi_data_cleaned[['Time_of_Day', 'Day_of_Week',  'Passenger_Count', 'Traffic_Conditions', 'Weather']] = imputer.fit_transform(df_taxi_data_cleaned[['Time_of_Day','Day_of_Week', 'Passenger_Count', 'Traffic_Conditions', 'Weather']])
+
+# Now your dataframe is cleaned and has no missing values
+
+#df_taxi_data_cleaned[df_taxi_data_cleaned.isna().any(axis=1)]
+missing_values = df_taxi_data_cleaned.isna().sum()
+print(missing_values)
+
+#How does the fare amount vary with distance?
+
+#visualization of relationship between distance and fare amount
+plt.figure(figsize=(10,6))
+sns.scatterplot(x='Trip_Distance_km', y='Trip_Price', data= df_taxi_data_cleaned)
+plt.title('Relationship between Trip Distance and Trip Price')
+plt.xlabel('Trip Distance (km)')
+plt.ylabel('Fare Amount (USD)')
+plt.show()
+
+#calculate the correlation between distance and fare
+correlation = df_taxi_data_cleaned['Trip_Distance_km'].corr(df_taxi_data_cleaned['Trip_Price'])
+print("Correlation between Trip Distance and Trip Price:", correlation)
+
+#Are there specific time periods (e.g., peak hours, weekends) with higher or lower fares?
+
+#visualize fare variations by time:
+plt.figure(figsize=(10,6))
+sns.boxplot(x='Time_of_Day',y='Trip_Price', data= df_taxi_data_cleaned)
+plt.title('Fare Variations by Time of Day')
+plt.xlabel('Time of Day')
+plt.ylabel('Trip Price (USD)')
+plt.show()
+
+
+plt.figure(figsize=(10, 6))
+sns.boxplot(x='Day_of_Week', y='Trip_Price', data=df_taxi_data_cleaned)
+plt.title('Trip Price by Day of Week')
+plt.xlabel('Day of Week')
+plt.ylabel('Trip Price (USD)')
+plt.show()
+
+#calculate the average fare by time:
+
+avg_fare_by_tod = df_taxi_data_cleaned.groupby('Time_of_Day').agg(
+    avg_fare= ('Trip_Price','mean')
+)
+
+avg_fare_by_dow = df_taxi_data_cleaned.groupby('Day_of_Week').agg(
+    avg_fare= ('Trip_Price','mean')
+)
+
+print("Average fare by time of day:", avg_fare_by_tod)
+print("Average fare by day of week:", avg_fare_by_dow)
+
+#Analyze the Impact of Weather on Fare
+plt.figure(figsize=(10,6))
+sns.boxplot(x='Weather',y='Trip_Price', data= df_taxi_data_cleaned)
+plt.title('Fare Variations by Weather')
+plt.xlabel('Weather')
+plt.ylabel('Trip Price (USD)')
+plt.show()
+
+#correlation between price with traffic conditions
+plt.figure(figsize=(10,6))
+sns.boxplot(x='Traffic_Conditions',y='Trip_Price', data= df_taxi_data_cleaned)
+plt.title('Fare Variations by Traffic Conditions')
+plt.xlabel('Traffic Conditions')
+plt.ylabel('Trip Price (USD)')
+plt.show()
+
+# Calculate the correlation coefficient between 'Passenger_Count' and 'Trip_Price'
+correlation_passenger_fare = df_taxi_data_cleaned['Trip_Duration_Minutes'].corr(df_taxi_data_cleaned['Trip_Price'])
+
+print("Correlation between Trip Duration and Trip Price:",correlation_passenger_fare)
+
+#visualization
+plt.figure(figsize=(10,6))
+sns.scatterplot(x='Trip_Duration_Minutes', y='Trip_Price', data=df_taxi_data_cleaned)
+plt.title('Relationship between Trip Duration  and Trip Price')
+plt.xlabel('Trip Duratiom')
+plt.ylabel('Trip Price (USD)')
+plt.show()
+
+##Regression Analysis
+
+#since the data is cleaned from missing values so we are good to go
+#convert categorical variables into numerical format using encoding tech such as one-hot encoding
+
+#1. Prepare the data for modelling
+# Converting categorical variables to numerical using One-Hot Encoding
+df_taxi_data_cleaned = pd.get_dummies(df_taxi_data_cleaned, columns=['Time_of_Day','Day_of_Week','Traffic_Conditions', 'Weather'], drop_first=True)
+
+# Define features (X) and target (y)
+X = df_taxi_data_cleaned.drop(columns=['Trip_Price'])
+y = df_taxi_data_cleaned['Trip_Price']
+
+#2. Split the data into training and testing sets
+# Typically, 80% of the data is used for training, and the remaining 20% is used for testing.
+from sklearn.model_selection import train_test_split
+
+# Split the data into training and testing sets
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+
+#3. Build the regression model
+from sklearn.linear_model import LinearRegression
+from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
+
+# Initialize the linear regression model
+regressor = LinearRegression()
+
+# Fit the model on the training data
+regressor.fit(X_train, y_train)
+
+# Predict on the test data
+y_pred = regressor.predict(X_test)
+
+#4. Evaluate the model
+# Calculate and print performance metrics
+mae = mean_absolute_error(y_test, y_pred)
+mse = mean_squared_error(y_test, y_pred)
+r2 = r2_score(y_test, y_pred)
+
+print(f"Mean Absolute Error (MAE): {mae}")
+print(f"Mean Squared Error (MSE): {mse}")
+print(f"R-Squared (R²): {r2}")
+
+#5.Interpret model coefficient
+# Display model coefficients
+coefficients = pd.DataFrame(regressor.coef_, X.columns, columns=['Coefficient'])
+print(coefficients)
+
+
