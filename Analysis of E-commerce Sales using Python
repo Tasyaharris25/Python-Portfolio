@@ -1,0 +1,105 @@
+#import library
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+import seaborn as sns
+from pandas.tseries.offsets import BDay
+
+#prepare the data
+#get the data from google drive
+df_ecommerce = pd.read_csv('/content/drive/MyDrive/Dataset/diversified_ecommerce_dataset.csv')
+df_ecommerce.head(10)
+
+#Identify duplicate
+df_duplicated = df_ecommerce.duplicated()
+print("Duplicate Rows:")
+print(df_duplicated)
+
+#count duplicate rows
+print("Count of Duplicate Rows:", df_duplicated.sum())
+
+#identify null values
+df_null = df_ecommerce.isnull()
+
+#count null values
+print("Count of Null Values:", df_null.sum())
+
+#Revenue distribution across product categories.
+#Maximum potential revenue; since we assume that all products in stock level/ in inventory sold out
+
+df_ecommerce["Revenue"] = (df_ecommerce['Price'] * (1- df_ecommerce['Discount']/100)) * (1 + df_ecommerce['Tax Rate']/100) * df_ecommerce['Stock Level']
+revenue_per_category = df_ecommerce.groupby('Category',as_index=False).agg(
+    TotalRevenue = ('Revenue', 'mean')
+).sort_values(by=['TotalRevenue'], ascending=False)
+
+revenue_highest = revenue_per_category["Category"].head(1)
+
+print("Category with highest revenue:", revenue_highest)
+print(revenue_per_category)
+
+#Correlation between Popularity Index, Price, and Discount.
+#calculate correlation between Popularity Index, Price, and Discount.
+
+correlation = df_ecommerce[["Price", "Discount", "Popularity Index"]].corr()
+
+print(correlation)
+
+# Visualize Correlation
+sns.heatmap(correlation, annot=True, cmap='coolwarm')
+plt.title('Correlation Between Popularity, Price, and Discount')
+plt.show()
+
+
+#top 10  most popular product
+top_10_products = df_ecommerce.nlargest(10, 'Popularity Index')
+
+print("Top 10 Most Popular Products:")
+print(top_10_products[["Product Name","Popularity Index"]])
+
+least_10_products = df_ecommerce.nsmallest(10, 'Popularity Index')
+
+print("Least 10 Most Popular Products:")
+print(least_10_products[["Product Name","Popularity Index"]])
+
+#Identify products with high return rates and investigate potential reasons.
+#1. Set a treshold for high return rates: Here is above 18%
+#2. Identify products with high return rates (Filter the products where the Return Rate exceeds the threshold.)
+#3. Investigate factors behind high return rates
+
+treshold = 18
+
+high_return_products = df_ecommerce[df_ecommerce['Return Rate'] > treshold]
+print(high_return_products[['Product Name', 'Return Rate', 'Category', 'Price', 'Discount']])
+
+#Relationship Between Return Rate and Other Factors
+#1. Return Rate vs Discount
+sns.scatterplot(data=high_return_products, x='Discount', y='Return Rate', hue='Category')
+plt.title('Return Rate vs Discount')
+plt.xlabel('Discount (%)')
+plt.ylabel('Return Rate (%)')
+plt.show()
+
+#2. Return rate vs shipping cost
+sns.scatterplot(data=high_return_products, x='Shipping Cost', y='Return Rate', hue='Shipping Method')
+plt.title('Return Rate vs Shipping Cost')
+plt.xlabel('Shipping Cost ($)')
+plt.ylabel('Return Rate (%)')
+plt.show()
+
+#3.Return rate vs popularity index
+sns.scatterplot(data=high_return_products, x='Popularity Index', y='Return Rate', hue='Category')
+plt.title('Return Rate vs Popularity Index')
+plt.xlabel('Popularity Index')
+plt.ylabel('Return Rate (%)')
+plt.show()
+
+# Count of high return rate products by category
+category_analysis = high_return_products.groupby('Category').size().reset_index(name='High Return Count')
+
+# Plot results
+sns.barplot(data=category_analysis, x='Category', y='High Return Count')
+plt.title('High Return Products by Category')
+plt.xlabel('Product Category')
+plt.ylabel('Count of High Return Products')
+plt.xticks(rotation=45)
+plt.show()
